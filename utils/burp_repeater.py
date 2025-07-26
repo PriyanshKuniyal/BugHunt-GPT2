@@ -6,28 +6,48 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
+import threading
 
 repeater_bp = Blueprint('repeater', __name__)
 client = None
 executor = ThreadPoolExecutor(max_workers=4)
+event_loop = None
 
 def init_app(app):
     """Initialize the repeater with the Flask app"""
     app.register_blueprint(repeater_bp, url_prefix='/utils')
     
-    # Initialize client when app starts
-    with app.app_context():
+    # Create event loop in a separate thread
+    global event_loop
+    event_loop = asyncio.new_event_loop()
+    
+    def run_loop(loop):
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
+    
+    threading.Thread(target=run_loop, args=(event_loop,), daemon=True).start()
+    
+    # Initialize client
+    async def create_client():
         global client
         uvloop.install()
         limits = httpx.Limits(max_connections=100, max_keepalive_connections=50)
         timeout = httpx.Timeout(10.0, connect=5.0)
         client = httpx.AsyncClient(limits=limits, timeout=timeout, http2=True)
     
+    asyncio.run_coroutine_threadsafe(create_client(), event_loop).result()
+    
     # Cleanup when app closes
     @app.teardown_appcontext
-    async def shutdown(exception=None):
+    def shutdown(exception=None):
         if client:
-            await client.aclose()
+            async def close_client():
+                try:
+                    await client.aclose()
+                except:
+                    pass  # Ignore errors during shutdown
+            
+            asyncio.run_coroutine_threadsafe(close_client(), event_loop).result()
 
 async def send_async_request(url: str, req_data: dict, headers: dict = None, method: str = 'POST'):
     """Async request handler"""
@@ -77,7 +97,11 @@ def repeater():
     headers = data.get('headers', {})
     method = data.get('method', 'POST').upper()
     
-    future = executor.submit(asyncio.run, send_async_request(url, req_data, headers, method))
+    future = executor.submit(
+        asyncio.run_coroutine_threadsafe,
+        send_async_request(url, req_data, headers, method),
+        event_loop
+    ).result()
     
     try:
         result = future.result(timeout=10)
