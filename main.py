@@ -5,8 +5,12 @@ import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
+from utils.burp_repeater import init_app
 
 app = Flask(__name__)
+
+# Initialize the repeater
+init_app(app)
 
 @app.route('/burp_capture', methods=['GET', 'POST'])
 async def burp_capture():
@@ -22,7 +26,8 @@ async def burp_capture():
 
 # Thread pool for sync-to-async bridge
 executor = ThreadPoolExecutor(max_workers=4)
-
+client=None
+uvloop.install()
 @app.route('/repeater', methods=['POST'])
 def repeater():
     """Main endpoint - bridges sync Flask with async httpx"""
@@ -54,6 +59,7 @@ def repeater():
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
