@@ -2,6 +2,9 @@ from flask import Flask, request, jsonify
 from utils.burp_proxy import capture_data  # Correct relative import
 import asyncio
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor
+import uvloop
 
 app = Flask(__name__)
 
@@ -14,6 +17,41 @@ async def burp_capture():
     try:
         data = await capture_data(url)
         return jsonify(data)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# Thread pool for sync-to-async bridge
+executor = ThreadPoolExecutor(max_workers=4)
+
+@app.route('/repeater', methods=['POST'])
+def repeater():
+    """Main endpoint - bridges sync Flask with async httpx"""
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+    
+    data = request.get_json()
+    
+    # Validate input (minimal validation for speed)
+    if not data or 'url' not in data:
+        return jsonify({'error': 'Missing url in payload'}), 400
+    
+    # Extract parameters with defaults
+    url = data['url']
+    req_data = data.get('request', {})
+    headers = data.get('headers', {})
+    method = data.get('method', 'POST').upper()
+    
+    # Run async function from sync context
+    future = executor.submit(
+        asyncio.run,
+        send_async_request(url, req_data, headers, method)
+    )
+    
+    try:
+        result = future.result(timeout=10)
+        if not result.get('success', False):
+            return jsonify(result), 500
+        return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
