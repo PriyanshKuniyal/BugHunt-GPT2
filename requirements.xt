@@ -1,0 +1,15 @@
+# Core dependencies
+flask[async]==2.3.2
+playwright==1.48.0
+httpx==0.27.0
+
+# Async and performance
+anyio==4.3.0
+asyncio==3.4.3
+
+# Security
+certifi==2024.2.2
+urllib3==2.2.1
+
+# Debugging (optional)
+loguru==0.7.2
