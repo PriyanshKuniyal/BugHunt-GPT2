@@ -1,3 +1,4 @@
+# utils/burp_repeater.py
 import httpx
 from flask import Flask, request, jsonify
 import asyncio
@@ -5,13 +6,17 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
+import os
 
-app = Flask(__name__)
+# Initialize Flask app as a Blueprint for better modularity
+from flask import Blueprint
+repeater_bp = Blueprint('repeater', __name__)
+
 client = None
 uvloop.install()  # Use ultra-fast uvloop for asyncio
 
 # Initialize the async client at startup
-@app.before_first_request
+@repeater_bp.before_app_first_request
 async def startup():
     global client
     limits = httpx.Limits(max_connections=100, max_keepalive_connections=50)
@@ -19,7 +24,7 @@ async def startup():
     client = httpx.AsyncClient(limits=limits, timeout=timeout, http2=True)
 
 # Cleanup on shutdown
-@app.teardown_appcontext
+@repeater_bp.teardown_app_request
 async def shutdown(exception=None):
     if client:
         await client.aclose()
@@ -58,3 +63,42 @@ async def send_async_request(url: str, req_data: dict, headers: dict = None, met
             'error': str(e),
             'success': False
         }
+
+# Thread pool for sync-to-async bridge
+executor = ThreadPoolExecutor(max_workers=4)
+
+@repeater_bp.route('/repeater', methods=['POST'])
+def repeater():
+    """Main endpoint - bridges sync Flask with async httpx"""
+    if not request.is_json:
+        return jsonify({'error': 'Request must be JSON'}), 400
+    
+    data = request.get_json()
+    
+    # Validate input (minimal validation for speed)
+    if not data or 'url' not in data:
+        return jsonify({'error': 'Missing url in payload'}), 400
+    
+    # Extract parameters with defaults
+    url = data['url']
+    req_data = data.get('request', {})
+    headers = data.get('headers', {})
+    method = data.get('method', 'POST').upper()
+    
+    # Run async function from sync context
+    future = executor.submit(
+        asyncio.run,
+        send_async_request(url, req_data, headers, method)
+    )
+    
+    try:
+        result = future.result(timeout=10)
+        if not result.get('success', False):
+            return jsonify(result), 500
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def init_app(app):
+    """Register the blueprint with the Flask app"""
+    app.register_blueprint(repeater_bp, url_prefix='/utils')
