@@ -13,6 +13,4 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 # Copy rest of the project
 COPY . /app
 
-RUN pip install -e .
-
 CMD ["python3", "main.py"]
