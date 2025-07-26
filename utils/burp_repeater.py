@@ -15,23 +15,22 @@ def init_app(app):
     """Initialize the repeater with the Flask app"""
     app.register_blueprint(repeater_bp, url_prefix='/utils')
     
-    # Set up async client on app startup
-    @app.before_first_request
-    async def startup():
+    # Initialize client when app starts
+    with app.app_context():
         global client
         uvloop.install()
         limits = httpx.Limits(max_connections=100, max_keepalive_connections=50)
         timeout = httpx.Timeout(10.0, connect=5.0)
         client = httpx.AsyncClient(limits=limits, timeout=timeout, http2=True)
     
-    # Cleanup on app teardown
+    # Cleanup when app closes
     @app.teardown_appcontext
     async def shutdown(exception=None):
         if client:
             await client.aclose()
 
 async def send_async_request(url: str, req_data: dict, headers: dict = None, method: str = 'POST'):
-    """Ultra-optimized async request handler"""
+    """Async request handler"""
     try:
         start = time.perf_counter()
         req_headers = headers or {}
@@ -65,7 +64,7 @@ async def send_async_request(url: str, req_data: dict, headers: dict = None, met
 
 @repeater_bp.route('/repeater', methods=['POST'])
 def repeater():
-    """Main endpoint - bridges sync Flask with async httpx"""
+    """Main endpoint"""
     if not request.is_json:
         return jsonify({'error': 'Request must be JSON'}), 400
     
