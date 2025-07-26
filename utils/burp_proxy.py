@@ -1,40 +1,39 @@
-import asyncio
-from urllib.parse import urlparse
-from typing import Dict, List, Optional
 import httpx
 from playwright.async_api import async_playwright
+from urllib.parse import urlparse
+import socket
 import logging
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-async def capture_data(url: str) -> Dict[str, any]:
-    """
-    Capture server response and browser requests for a given URL
-    
-    Args:
-        url: Target URL to analyze (must include http:// or https://)
-    
-    Returns:
-        Dictionary containing:
-        - server_response: Raw HTTP response from direct request
-        - browser_requests: List of requests made by browser
-        - error: Optional error message if any step failed
-    """
-    # Validate and normalize URL
+async def capture_data(url: str) -> dict:
+    """Enhanced version with DNS validation and retry logic"""
     if not url.startswith(('http://', 'https://')):
         url = f'https://{url}'
-    
-    target_host = urlparse(url).netloc
+
     result = {
         "server_response": None,
         "browser_requests": [],
         "error": None
     }
 
-    # 1. Capture direct server response
-    async with httpx.AsyncClient(timeout=30.0) as client:
+    # 1. First validate DNS resolution
+    try:
+        hostname = urlparse(url).netloc.split(':')[0]
+        socket.gethostbyname(hostname)
+    except socket.gaierror as e:
+        error_msg = f"DNS resolution failed for {hostname}: {str(e)}"
+        logger.error(error_msg)
+        result["error"] = error_msg
+        return result
+
+    # 2. Server request with retry
+    async with httpx.AsyncClient(
+        timeout=30.0,
+        limits=httpx.Limits(max_connections=5),
+        transport=httpx.AsyncHTTPTransport(retries=3)
+    ) as client:
         try:
             resp = await client.get(
                 url,
@@ -48,79 +47,55 @@ async def capture_data(url: str) -> Dict[str, any]:
                 "status_code": resp.status_code,
                 "headers": dict(resp.headers),
                 "final_url": str(resp.url),
-                "response_time_ms": resp.elapsed.microseconds / 1000,
                 "content_sample": resp.text[:2000] + "..." if len(resp.text) > 2000 else resp.text
             }
         except Exception as e:
-            logger.error(f"Server request failed: {str(e)}")
-            result["error"] = f"Server request failed: {str(e)}"
+            error_msg = f"Server request failed: {str(e)}"
+            logger.error(error_msg)
+            result["error"] = error_msg
             return result
 
-    # 2. Capture browser activity
-    try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                timeout=30000,
-                args=[
-                    '--disable-gpu',
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--single-process'
-                ]
-            )
-            context = await browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                viewport={'width': 1280, 'height': 720},
-                java_script_enabled=True
-            )
-            
-            # Enable request interception
-            await context.route('**/*', lambda route: route.continue_())
-            
-            page = await context.new_page()
-            
-            # Store requests
-            requests = []
-            
-            def log_request(request):
-                try:
-                    if target_host in request.url:
+    # 3. Browser capture (only if server request succeeded)
+    if result["server_response"]:
+        try:
+            async with async_playwright() as p:
+                browser = await p.chromium.launch(
+                    timeout=30000,
+                    args=[
+                        '--disable-gpu',
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--dns-prefetch-disable'  # Important for DNS stability
+                    ]
+                )
+                context = await browser.new_context(
+                    ignore_https_errors=True,
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                )
+                
+                page = await context.new_page()
+                
+                requests = []
+                def log_request(request):
+                    if urlparse(url).netloc in request.url:
                         requests.append({
                             "method": request.method,
                             "url": request.url,
-                            "headers": dict(request.headers),
-                            "resource_type": request.resource_type,
-                            "timestamp": request.timestamp
+                            "headers": dict(request.headers)
                         })
-                except Exception as e:
-                    logger.warning(f"Failed to log request: {str(e)}")
-            
-            page.on("request", log_request)
-            
-            try:
-                await page.goto(
-                    url,
-                    wait_until="networkidle",
-                    timeout=45000,
-                    referer=None
-                )
-                result["browser_requests"] = requests
-            except Exception as e:
-                logger.error(f"Browser navigation failed: {str(e)}")
-                result["error"] = f"Browser navigation failed: {str(e)}"
-            finally:
-                await context.close()
-                await browser.close()
                 
-    except Exception as e:
-        logger.error(f"Playwright failed: {str(e)}")
-        result["error"] = f"Playwright failed: {str(e)}"
-    
-    # Redact sensitive headers
-    for request in result["browser_requests"]:
-        for header in ['cookie', 'authorization', 'set-cookie']:
-            if header in request["headers"]:
-                request["headers"][header] = "[REDACTED]"
-    
+                page.on("request", log_request)
+                
+                try:
+                    await page.goto(url, wait_until="networkidle", timeout=45000)
+                    result["browser_requests"] = requests
+                except Exception as e:
+                    logger.warning(f"Browser navigation warning: {str(e)}")
+                finally:
+                    await browser.close()
+                    
+        except Exception as e:
+            logger.error(f"Playwright failed: {str(e)}")
+            # Don't overwrite server response if browser fails
+
     return result
