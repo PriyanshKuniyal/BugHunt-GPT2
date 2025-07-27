@@ -217,7 +217,7 @@ class IntruderEngine:
         text = re.sub(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', '[UUID]', text)
         return text.lower()
 
-    def _detect_vulnerabilities(self, response: httpx.Response, payload: Tuple, normalized_text: str) -> Dict:
+        def _detect_vulnerabilities(self, response: httpx.Response, payload: Tuple, normalized_text: str) -> Dict:
         """Advanced vulnerability detection"""
         payload_str = str(payload).lower()
         
@@ -248,7 +248,6 @@ class IntruderEngine:
             "xss": is_xss,
             "idor": is_idor
         }
-
     def _calculate_severity(self, anomalies: Dict) -> int:
         """Calculate severity score (0-100)"""
         score = 0
