@@ -1,11 +1,13 @@
 import asyncio
 import re
+import logging
+import math
 from itertools import product
 from typing import List, Dict, Optional, Tuple, Union
-import httpx
 from collections import defaultdict
-import logging
 from dataclasses import dataclass
+import httpx
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -232,7 +234,7 @@ class IntruderEngine:
         is_xss = (
             any(tag in payload_str for tag in ["<script>", "onerror=", "javascript:"]) and
             (payload_str in normalized_text or 
-             any(res in response.headers.get("content-type", "") for res in ["text/html", "application/xhtml"])
+             any(res in response.headers.get("content-type", "") for res in ["text/html", "application/xhtml"]))
         )
         
         # IDOR (Indirect Object Reference)
@@ -248,6 +250,7 @@ class IntruderEngine:
             "xss": is_xss,
             "idor": is_idor
         }
+
     def _calculate_severity(self, anomalies: Dict) -> int:
         """Calculate severity score (0-100)"""
         score = 0
