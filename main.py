@@ -6,11 +6,27 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
 from utils.burp_repeater import init_app
-
+from utils.burp_intruder import intruder_engine, AttackType
 app = Flask(__name__)
 
 # Initialize the repeater
 init_app(app)
+
+@app.route("/intruder/attack", methods=["POST"])
+async def intruder_attack():
+    data = request.json
+    try:
+        result = await intruder_engine.attack(
+            base_request=data["base_request"],
+            attack_type=data["attack_type"],
+            payload_sets=data["payload_sets"],
+            payload_positions=data["payload_positions"],
+            max_requests=data.get("max_requests", 1000),
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 
 @app.route('/burp_capture', methods=['GET', 'POST'])
 async def burp_capture():
