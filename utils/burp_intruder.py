@@ -29,14 +29,15 @@ class PayloadGenerator:
         elif payload_type == "bruteforce":
             charset = payload_config["charset"]
             min_len, max_len = payload_config["min_len"], payload_config["max_len"]
-            return list(generate_bruteforce(charset, min_len, max_len))
+            return list(self._generate_bruteforce(charset, min_len, max_len))
         raise ValueError(f"Unsupported payload type: {payload_type}")
 
-def generate_bruteforce(charset: str, min_len: int, max_len: int):
-    """Lazy brute-force generator to avoid memory overload"""
-    from itertools import product
-    for length in range(min_len, max_len + 1):
-        yield from (''.join(p) for p in product(charset, repeat=length)
+    @staticmethod
+    def _generate_bruteforce(charset: str, min_len: int, max_len: int):
+        """Lazy brute-force generator to avoid memory overload"""
+        from itertools import product
+        for length in range(min_len, max_len + 1):
+            yield from (''.join(p) for p in product(charset, repeat=length))
 
 class IntruderEngine:
     """Core Intruder engine with async HTTP, deduplication, and vulnerability detection"""
@@ -47,14 +48,9 @@ class IntruderEngine:
             follow_redirects=True
         )
 
-    async def attack(
-        self,
-        base_request: Dict,
-        attack_type: str,
-        payload_sets: List[Dict],
-        payload_positions: List[str],
-        max_requests: int = 1000,
-    ) -> Dict:
+    async def attack(self, base_request: Dict, attack_type: str,
+                   payload_sets: List[Dict], payload_positions: List[str],
+                   max_requests: int = 1000) -> Dict:
         # Generate payload combinations
         payload_combinations = self._generate_combinations(attack_type, payload_sets)
         
