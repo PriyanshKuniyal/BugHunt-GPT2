@@ -1,16 +1,23 @@
 from flask import Flask, request, jsonify
-from utils.burp_proxy import capture_data  # Correct relative import
+from utils.burp_proxy import capture_data
+from utils.burp_repeater import init_app
+from utils.burp_intruder import intruder_engine, AttackType
+from utils.burp_sequencer import sequencer_engine
 import asyncio
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
-from utils.burp_repeater import init_app
-from utils.burp_intruder import intruder_engine, AttackType
+
 app = Flask(__name__)
 
 # Initialize the repeater
 init_app(app)
+
+# Thread pool for sync-to-async bridge
+executor = ThreadPoolExecutor(max_workers=4)
+client = None
+uvloop.install()
 
 @app.route("/intruder/attack", methods=["POST"])
 async def intruder_attack():
@@ -27,6 +34,25 @@ async def intruder_attack():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/sequencer/analyze', methods=['POST'])
+async def sequencer_analysis():
+    """Endpoint for token randomness analysis"""
+    data = request.json
+    try:
+        # Validate required fields
+        required_fields = ['base_request', 'token_locations']
+        if not all(field in data for field in required_fields):
+            return jsonify({"error": f"Missing required fields: {required_fields}"}), 400
+
+        result = await sequencer_engine.analyze(
+            base_request=data["base_request"],
+            token_locations=data["token_locations"],
+            sample_size=data.get("sample_size", 500),
+            concurrency=data.get("concurrency", 50)
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
 
 @app.route('/burp_capture', methods=['GET', 'POST'])
 async def burp_capture():
@@ -40,10 +66,6 @@ async def burp_capture():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-# Thread pool for sync-to-async bridge
-executor = ThreadPoolExecutor(max_workers=4)
-client=None
-uvloop.install()
 @app.route('/repeater', methods=['POST'])
 def repeater():
     """Main endpoint - bridges sync Flask with async httpx"""
@@ -75,7 +97,6 @@ def repeater():
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
