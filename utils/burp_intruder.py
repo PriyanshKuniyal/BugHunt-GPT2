@@ -17,7 +17,7 @@ class AttackType:
     CLUSTER_BOMB = "cluster_bomb"
 
 class PayloadGenerator:
-    """Generates payloads efficiently (lazy evaluation for large sets)."""
+    """Generates payloads efficiently with lazy evaluation"""
     @staticmethod
     def generate(payload_config: Dict) -> List[str]:
         payload_type = payload_config["type"]
@@ -33,16 +33,19 @@ class PayloadGenerator:
         raise ValueError(f"Unsupported payload type: {payload_type}")
 
 def generate_bruteforce(charset: str, min_len: int, max_len: int):
-    """Lazy brute-force generator to avoid memory overload."""
-    from itertools import permutations
+    """Lazy brute-force generator to avoid memory overload"""
+    from itertools import product
     for length in range(min_len, max_len + 1):
-        for p in product(charset, repeat=length):
-            yield ''.join(p)
+        yield from (''.join(p) for p in product(charset, repeat=length)
 
 class IntruderEngine:
-    """Core Intruder logic with async HTTP and response deduplication."""
+    """Core Intruder engine with async HTTP, deduplication, and vulnerability detection"""
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=10.0, limits=httpx.Limits(max_connections=100))
+        self.client = httpx.AsyncClient(
+            timeout=10.0,
+            limits=httpx.Limits(max_connections=100),
+            follow_redirects=True
+        )
 
     async def attack(
         self,
@@ -55,56 +58,48 @@ class IntruderEngine:
         # Generate payload combinations
         payload_combinations = self._generate_combinations(attack_type, payload_sets)
         
-        # Execute requests and deduplicate responses
-        unique_responses = defaultdict(list)
+        # Execute requests with rate limiting
+        semaphore = asyncio.Semaphore(50)  # Limit concurrent requests
         tasks = []
         for combo in payload_combinations[:max_requests]:
-            modified_request = self._replace_payloads(base_request, payload_positions, combo)
-            tasks.append(self._send_request(modified_request, combo))
+            modified_request = self._replace_payloads(base_request.copy(), payload_positions, combo)
+            tasks.append(
+                self._execute_request_with_semaphore(semaphore, modified_request, combo)
+            )
         
-        # Process responses as they complete
+        # Process responses
         responses = await asyncio.gather(*tasks, return_exceptions=True)
-        for resp, payload in responses:
-            if isinstance(resp, Exception):
-                logger.error(f"Request failed: {resp}")
-                continue
-            response_key = self._response_key(resp)
-            unique_responses[response_key].append(payload)
+        return self._analyze_responses(responses)
 
-        # Format results (group duplicates)
-        results = []
-        for key, payloads in unique_responses.items():
-            resp = key.split('|||')
-            results.append({
-                "payloads": payloads,
-                "count": len(payloads),
-                "status_code": int(resp[0]),
-                "response_length": int(resp[1]),
-                "response_body": resp[2] if len(resp) > 2 else None,
-            })
-
-        return {"results": results}
+    async def _execute_request_with_semaphore(self, semaphore, request, payload):
+        async with semaphore:
+            return await self._send_request(request, payload)
 
     def _generate_combinations(self, attack_type: str, payload_sets: List[Dict]) -> List[Tuple]:
-        """Generate payload combinations based on attack type."""
+        """Generate payload combinations based on attack type"""
         payloads = [PayloadGenerator.generate(config) for config in payload_sets]
         if attack_type == AttackType.SNIPER:
             return [(p,) for p in payloads[0]]
         elif attack_type == AttackType.CLUSTER_BOMB:
             return list(product(*payloads))
+        elif attack_type == AttackType.PITCHFORK:
+            return list(zip(*payloads))
         raise ValueError(f"Unsupported attack type: {attack_type}")
 
     def _replace_payloads(self, request: Dict, positions: List[str], payloads: Tuple) -> Dict:
-        """Replace §0§, §1§, etc., with actual payloads."""
-        modified = request.copy()
+        """Replace §0§, §1§ with actual payloads"""
         for i, pos in enumerate(positions):
-            modified["url"] = modified["url"].replace(f"§{i}§", payloads[i])
-            if "body" in modified:
-                modified["body"] = modified["body"].replace(f"§{i}§", payloads[i])
-        return modified
+            if "url" in request:
+                request["url"] = request["url"].replace(f"§{i}§", str(payloads[i]))
+            if "body" in request:
+                request["body"] = request["body"].replace(f"§{i}§", str(payloads[i]))
+            if "headers" in request:
+                for header, value in request["headers"].items():
+                    request["headers"][header] = value.replace(f"§{i}§", str(payloads[i]))
+        return request
 
     async def _send_request(self, request: Dict, payload: Tuple) -> Tuple[Union[httpx.Response, Exception], Tuple]:
-        """Send an async HTTP request and return (response, payload)."""
+        """Send an async HTTP request"""
         try:
             resp = await self.client.request(
                 method=request["method"],
@@ -114,12 +109,83 @@ class IntruderEngine:
             )
             return resp, payload
         except Exception as e:
+            logger.error(f"Request failed: {e}")
             return e, payload
 
-    def _response_key(self, response: httpx.Response) -> str:
-        """Create a unique key for deduplication (status + length + body hash)."""
-        body_hash = hash(response.text)  # Faster than storing full body
-        return f"{response.status_code}|||{len(response.text)}|||{body_hash}"
+    def _analyze_responses(self, responses: List) -> Dict:
+        """Group responses and detect vulnerabilities"""
+        unique_responses = defaultdict(list)
+        anomaly_stats = {
+            "sqli": 0,
+            "xss": 0,
+            "error_responses": 0
+        }
+
+        for resp, payload in responses:
+            if isinstance(resp, Exception):
+                continue
+            
+            # Normalize response for deduplication
+            stable_text = self._normalize_response(resp.text)
+            response_key = f"{resp.status_code}|||{len(resp.text)}|||{stable_text[:200]}"  # Store snippet
+            
+            # Detect anomalies
+            anomalies = self._detect_anomalies(resp, payload)
+            if anomalies["is_sqli"]:
+                anomaly_stats["sqli"] += 1
+            if anomalies["is_xss"]:
+                anomaly_stats["xss"] += 1
+            if resp.status_code >= 400:
+                anomaly_stats["error_responses"] += 1
+
+            unique_responses[response_key].append({
+                "payload": payload,
+                "anomalies": anomalies
+            })
+
+        # Format final output
+        results = []
+        for key, payload_data in unique_responses.items():
+            status_code, length, body_snippet = key.split('|||')
+            results.append({
+                "count": len(payload_data),
+                "payloads": [item["payload"] for item in payload_data],
+                "status_code": int(status_code),
+                "response_length": int(length),
+                "response_snippet": body_snippet,
+                "sample_anomalies": payload_data[0]["anomalies"]  # Show from first occurrence
+            })
+
+        return {
+            "results": results,
+            "stats": {
+                "total_requests": len(responses),
+                "unique_responses": len(unique_responses),
+                **anomaly_stats
+            }
+        }
+
+    def _normalize_response(self, text: str) -> str:
+        """Normalize dynamic content for better deduplication"""
+        text = re.sub(r'\d+', '[NUM]', text)          # Replace numbers
+        text = re.sub(r'[0-9a-f]{32}', '[HASH]', text)  # Replace hashes
+        return text
+
+    def _detect_anomalies(self, response: httpx.Response, payload: Tuple) -> Dict:
+        """Detect potential vulnerabilities in response"""
+        text = response.text.lower()
+        payload_str = str(payload).lower()
+        
+        return {
+            "is_sqli": any(
+                term in text for term in ["error", "syntax", "mysql", "sql"]
+            ) and ("'" in payload_str or "select" in payload_str),
+            "is_xss": (
+                any(tag in payload_str for tag in ["<script>", "onerror="]) 
+                and payload_str in text
+            ),
+            "is_error": response.status_code >= 400
+        }
 
 # Singleton for reuse
 intruder_engine = IntruderEngine()
