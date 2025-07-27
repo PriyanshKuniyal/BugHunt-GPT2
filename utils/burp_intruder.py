@@ -217,7 +217,7 @@ class IntruderEngine:
         text = re.sub(r'[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}', '[UUID]', text)
         return text.lower()
 
-        def _detect_vulnerabilities(self, response: httpx.Response, payload: Tuple, normalized_text: str) -> Dict:
+    def _detect_vulnerabilities(self, response: httpx.Response, payload: Tuple, normalized_text: str) -> Dict:
         """Advanced vulnerability detection"""
         payload_str = str(payload).lower()
         
