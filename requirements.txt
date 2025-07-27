@@ -22,3 +22,5 @@ pytest-asyncio==0.21.0
 certifi==2024.2.2
 urllib3==2.2.1
 
+pyjwt
+cryptography
