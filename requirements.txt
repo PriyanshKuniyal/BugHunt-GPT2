@@ -21,6 +21,6 @@ pytest-asyncio==0.21.0
 # Security
 certifi==2024.2.2
 urllib3==2.2.1
-
+scipy
 pyjwt
 cryptography
