@@ -19,6 +19,72 @@ executor = ThreadPoolExecutor(max_workers=4)
 client = None
 uvloop.install()
 
+browser_lock = threading.Lock()
+browser_instance = None
+
+def get_browser():
+    """Get or create a browser instance with thread safety"""
+    global browser_instance
+    with browser_lock:
+        if browser_instance is None:
+            browser_instance = TextBasedBrowser(
+                headless=True,  # Set to False for debugging
+                user_data_dir="./browser_data",
+                proxy=None  # Add your proxy here if needed
+            )
+        return browser_instance
+
+@app.route('/browser/execute', methods=['POST'])
+def execute_browser_commands():
+    """Endpoint for executing browser commands"""
+    try:
+        data = request.json
+        
+        # Validate input
+        if not data or 'instructions' not in data:
+            return jsonify({"error": "Missing 'instructions' in payload"}), 400
+        
+        # Get browser instance
+        browser = get_browser()
+        
+        # Execute instructions
+        results = browser.execute_ai_instructions(data['instructions'])
+        
+        # Return both the results and current page state
+        return jsonify({
+            "results": results,
+            "current_state": browser.current_page_text,
+            "interactive_elements": [
+                elem["description"] for elem in browser.interactive_elements
+            ]
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/browser/reset', methods=['POST'])
+def reset_browser():
+    """Reset the browser instance"""
+    global browser_instance
+    try:
+        with browser_lock:
+            if browser_instance:
+                browser_instance.close()
+                browser_instance = None
+        return jsonify({"status": "Browser reset successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.teardown_appcontext
+def shutdown_browser(exception=None):
+    """Clean up browser when app shuts down"""
+    global browser_instance
+    with browser_lock:
+        if browser_instance:
+            browser_instance.close()
+            browser_instance = None
+
+
 @app.route("/intruder/attack", methods=["POST"])
 async def intruder_attack():
     data = request.json
