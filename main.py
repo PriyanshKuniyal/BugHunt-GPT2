@@ -36,10 +36,10 @@ async def intruder_attack():
 
 @app.route('/sequencer/analyze', methods=['POST'])
 async def sequencer_analysis():
-    """Endpoint for token randomness analysis"""
     data = request.json
+    print("[DEBUG] Incoming Data:", data)  # Add this line
+
     try:
-        # Validate required fields
         required_fields = ['base_request', 'token_locations']
         if not all(field in data for field in required_fields):
             return jsonify({"error": f"Missing required fields: {required_fields}"}), 400
