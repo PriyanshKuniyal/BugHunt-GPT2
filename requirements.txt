@@ -28,3 +28,4 @@ cryptography
 entropy
 requests
 scikit-learn
+tensorflow
