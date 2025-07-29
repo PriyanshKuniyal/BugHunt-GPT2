@@ -25,7 +25,7 @@ urllib3==2.2.1
 scipy
 pyjwt
 cryptography
-# entropy - optional
+entropy
 requests
 scikit-learn
 
