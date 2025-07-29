@@ -31,4 +31,5 @@ scikit-learn
 
 # ⬇️ Added to support additional imports in your code
 tensorflow           # for `import tensorflow as tf`
-dnspython            # for `import dns.resolver`
+dnspython==2.4.2
+# for `import dns.resolver`
