@@ -15,9 +15,123 @@ app = Flask(__name__)
 init_app(app)
 
 # Thread pool for sync-to-async bridge
-executor = ThreadPoolExecutor(max_workers=4)
+executor = ThreadPoolExecutor(max_workers=10)
 client = None
 uvloop.install()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Scanner instances lock
+scanner_lock = threading.Lock()
+active_scanners: Dict[str, AdvancedBurpScanner] = {}
+
+def get_scanner(scanner_id: str, config: Optional[Dict] = None) -> AdvancedBurpScanner:
+    """Get or create a scanner instance with thread safety"""
+    global active_scanners
+    with scanner_lock:
+        if scanner_id not in active_scanners:
+            if not config:
+                config = {
+                    'general': {
+                        'threads': 10,
+                        'rate_limit': 0.1,
+                        'timeout': 10
+                    },
+                    'scan_types': {
+                        'sqli': True,
+                        'xss': True,
+                        'idor': True,
+                        'ssrf': True
+                    }
+                }
+            active_scanners[scanner_id] = AdvancedBurpScanner("", config)
+        return active_scanners[scanner_id]
+
+@app.route('/scanner/start', methods=['POST'])
+def start_scan():
+    """Start a new scan with optional configuration"""
+    try:
+        data = request.json
+        if not data or 'url' not in data:
+            return jsonify({"error": "Missing 'url' in payload"}), 400
+        
+        scanner_id = data.get('scanner_id', f"scan_{int(time.time())}")
+        config = data.get('config', {})
+        
+        scanner = get_scanner(scanner_id, config)
+        scanner.base_url = data['url']
+        
+        # Run scan in background thread
+        def run_scan():
+            try:
+                scanner.run_scan()
+            except Exception as e:
+                logger.error(f"Scan failed: {str(e)}")
+        
+        executor.submit(run_scan)
+        
+        return jsonify({
+            "scanner_id": scanner_id,
+            "status": "scan_started",
+            "config": config
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/scanner/status/<scanner_id>', methods=['GET'])
+def scan_status(scanner_id):
+    """Get scan status and results"""
+    try:
+        scanner = get_scanner(scanner_id)
+        
+        return jsonify({
+            "scanner_id": scanner_id,
+            "status": "running" if not scanner.vulnerabilities else "completed",
+            "vulnerabilities_found": len(scanner.vulnerabilities),
+            "pages_crawled": len(scanner.visited_urls),
+            "last_10_vulnerabilities": scanner.vulnerabilities[-10:] if scanner.vulnerabilities else []
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
+@app.route('/scanner/results/<scanner_id>', methods=['GET'])
+def scan_results(scanner_id):
+    """Get full scan results"""
+    try:
+        scanner = get_scanner(scanner_id)
+        
+        if not scanner.vulnerabilities:
+            return jsonify({"error": "Scan not completed or no vulnerabilities found"}), 404
+            
+        return jsonify({
+            "scanner_id": scanner_id,
+            "vulnerabilities": scanner.vulnerabilities,
+            "metadata": {
+                "pages_crawled": len(scanner.visited_urls),
+                "api_endpoints": len(scanner.api_endpoints),
+                "scan_duration": f"{(time.time() - scanner.start_time):.2f}s" if hasattr(scanner, 'start_time') else "unknown"
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 404
+
+@app.route('/scanner/stop/<scanner_id>', methods=['POST'])
+def stop_scan(scanner_id):
+    """Stop a running scan"""
+    global active_scanners
+    try:
+        with scanner_lock:
+            if scanner_id in active_scanners:
+                del active_scanners[scanner_id]
+        return jsonify({"status": "scan_stopped", "scanner_id": scanner_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 browser_lock = threading.Lock()
 browser_instance = None
