@@ -3,12 +3,17 @@ from utils.burp_proxy import capture_data
 from utils.burp_repeater import init_app
 from utils.burp_intruder import intruder_engine, AttackType
 from utils.burp_sequencer import sequencer_engine
+from utils.burp_scanner import AdvancedBurpScanner
 import asyncio
 import os
 import time
+import threading
+import logging
 from concurrent.futures import ThreadPoolExecutor
 import uvloop
-import logging
+import json
+from typing import Dict, Optional
+
 app = Flask(__name__)
 
 # Initialize the repeater
