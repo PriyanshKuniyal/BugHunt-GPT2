@@ -25,3 +25,4 @@ scipy
 pyjwt
 cryptography
 entropy
+requests
