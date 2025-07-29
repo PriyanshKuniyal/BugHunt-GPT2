@@ -27,3 +27,4 @@ pyjwt
 cryptography
 entropy
 requests
+sklearn
