@@ -1325,7 +1325,7 @@ class AdvancedBurpScanner:
             except Exception as e:
                 logger.warning(f"Open redirect test failed for {form['action']}: {str(e)}")
                 continue
-                finally:
+            finally:
                     self.session.max_redirects = original_follow
     
     def _test_cors(self, endpoint: str):
