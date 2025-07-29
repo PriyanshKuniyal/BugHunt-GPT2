@@ -1797,14 +1797,25 @@ class AdvancedBurpScanner:
     def _format_vuln_html(self, vuln):
         """Format a single vulnerability for HTML report"""
         severity_class = vuln['severity'].lower()
+        
+        # Safely escape all user-provided content
+        vuln_type = html.escape(vuln['type'])
+        url = html.escape(vuln['url'])
+        description = html.escape(vuln['description'])
+        timestamp = html.escape(str(vuln['timestamp']))
+        
+        # Handle optional fields with escaping
+        payload = f"<p><strong>Payload:</strong> <code>{html.escape(str(vuln.get('payload', '')))}</code></p>" if vuln.get('payload') else ""
+        evidence = f"<p><strong>Evidence:</strong> <pre>{html.escape(str(vuln.get('evidence', '')))}</pre></p>" if vuln.get('evidence') else ""
+        
         return f"""
         <div class="vulnerability {severity_class}">
-            <h3>{vuln['type']} <span class="severity-count severity-{severity_class}">{vuln['severity']}</span></h3>
-            <p><strong>URL:</strong> {vuln['url']}</p>
-            <p><strong>Description:</strong> {vuln['description']}</p>
-            {f"<p><strong>Payload:</strong> <code>{html.escape(str(vuln.get('payload', ''))}</code></p>" if vuln.get('payload') else ""}
-            {f"<p><strong>Evidence:</strong> <pre>{html.escape(str(vuln.get('evidence', ''))}</pre></p>" if vuln.get('evidence') else ""}
-            <p><strong>Timestamp:</strong> {vuln['timestamp']}</p>
+            <h3>{vuln_type} <span class="severity-count severity-{severity_class}">{vuln['severity']}</span></h3>
+            <p><strong>URL:</strong> {url}</p>
+            <p><strong>Description:</strong> {description}</p>
+            {payload}
+            {evidence}
+            <p><strong>Timestamp:</strong> {timestamp}</p>
         </div>
         """
     
