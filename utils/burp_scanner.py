@@ -1846,49 +1846,65 @@ class AdvancedBurpScanner:
     
     def _generate_markdown_report(self, report, output_file):
         """Generate Markdown version of the report"""
-        markdown = f"""
-# Security Scan Report
-
-## Scan Metadata
-- **Target URL**: {report['metadata']['base_url']}
-- **Scan Date**: {report['metadata']['scan_date']}
-- **Duration**: {report['metadata']['duration']}
-- **Pages Crawled**: {report['metadata']['pages_crawled']}
-- **Endpoints Found**: {report['metadata']['endpoints_found']}
-- **Vulnerabilities Found**: 
-  - Critical: {report['stats']['severity_distribution'].get('Critical', 0)}
-  - High: {report['stats']['severity_distribution'].get('High', 0)}
-  - Medium: {report['stats']['severity_distribution'].get('Medium', 0)}
-  - Low: {report['stats']['severity_distribution'].get('Low', 0)}
-  - Info: {report['stats']['severity_distribution'].get('Info', 0)}
-
-## Vulnerabilities
-{"".join(self._format_vuln_markdown(vuln) for vuln in report['vulnerabilities'])}
-
-## Recommendations
-{"".join(f"- **{rec['issue']}**: {rec['fix']}\n" for rec in report['recommendations'])}
-
-## Scan Statistics
-
-### Vulnerability Distribution
-{"".join(f"- {vuln_type}: {count}\n" for vuln_type, count in report['stats']['vulnerability_distribution'].items())}
-        """
-        
-        with open(output_file, 'w') as f:
-            f.write(markdown.strip())
+        try:
+            # Create markdown content
+            markdown_lines = [
+                "# Security Scan Report",
+                "",
+                "## Scan Metadata",
+                f"- **Target URL**: {report['metadata']['base_url']}",
+                f"- **Scan Date**: {report['metadata']['scan_date']}",
+                f"- **Duration**: {report['metadata']['duration']}",
+                f"- **Pages Crawled**: {report['metadata']['pages_crawled']}",
+                f"- **Endpoints Found**: {report['metadata']['endpoints_found']}",
+                f"- **Vulnerabilities Found**:",
+                f"  - Critical: {report['stats']['severity_distribution'].get('Critical', 0)}",
+                f"  - High: {report['stats']['severity_distribution'].get('High', 0)}",
+                f"  - Medium: {report['stats']['severity_distribution'].get('Medium', 0)}",
+                f"  - Low: {report['stats']['severity_distribution'].get('Low', 0)}",
+                f"  - Info: {report['stats']['severity_distribution'].get('Info', 0)}",
+                "",
+                "## Vulnerabilities"
+            ]
     
-    def _format_vuln_markdown(self, vuln):
-        """Format a single vulnerability for Markdown report"""
-        return f"""
-### {vuln['type']} ({vuln['severity']})
-- **URL**: {vuln['url']}
-- **Description**: {vuln['description']}
-{vuln.get('payload') and f"- **Payload**: `{vuln['payload']}`"}
-{vuln.get('evidence') and f"- **Evidence**: \n```\n{vuln['evidence']}\n```"}
-- **Timestamp**: {vuln['timestamp']}
-
-"""
+            # Add vulnerabilities
+            for vuln in report['vulnerabilities']:
+                markdown_lines.extend([
+                    "",
+                    f"### {vuln['type']} ({vuln['severity']})",
+                    f"- **URL**: {vuln['url']}",
+                    f"- **Description**: {vuln['description']}"
+                ])
+                if vuln.get('payload'):
+                    markdown_lines.append(f"- **Payload**: `{vuln['payload']}`")
+                if vuln.get('evidence'):
+                    markdown_lines.append(f"- **Evidence**: \n```\n{vuln['evidence']}\n```")
+                markdown_lines.append(f"- **Timestamp**: {vuln['timestamp']}")
     
+            # Add recommendations and stats
+            markdown_lines.extend([
+                "",
+                "## Recommendations"
+            ])
+            for rec in report['recommendations']:
+                markdown_lines.append(f"- **{rec['issue']}**: {rec['fix']}")
+    
+            markdown_lines.extend([
+                "",
+                "## Scan Statistics",
+                "",
+                "### Vulnerability Distribution"
+            ])
+            for vuln_type, count in report['stats']['vulnerability_distribution'].items():
+                markdown_lines.append(f"- {vuln_type}: {count}")
+    
+            # Write to file
+            with open(output_file, 'w') as f:
+                f.write('\n'.join(markdown_lines))
+                
+        except Exception as e:
+            logger.error(f"Error generating Markdown report: {str(e)}")
+            raise
     def _get_vuln_distribution(self):
         """Get count of each vulnerability type"""
         dist = {}
