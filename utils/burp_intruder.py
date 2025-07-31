@@ -133,6 +133,15 @@ class IntruderEngine:
         """Execute rate-limited HTTP request"""
         async with semaphore:
             try:
+                if not transport.is_closed():  # Check connection first
+                    return make_request(url, payload)
+                else:
+                    transport.reconnect()  # Auto-reconnect if closed
+                    return make_request(url, payload)
+            except Exception as e:
+                logging.error(f"Burp Intruder failed: {str(e)}")
+                return None
+            try:
                 resp = await self.client.request(
                     method=request["method"],
                     url=request["url"],
