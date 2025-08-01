@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import uvloop
 import json
 from typing import Dict, Optional
-from core.utils.sqlmap import run_sqlmap
+from utils.sqlmap import run_sqlmap
 
 app = Flask(__name__)
 
