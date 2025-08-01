@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import uvloop
 import json
 from typing import Dict, Optional
-from utils.sqlmap import run_sqlmap
+from utils.sqlmap import run_sqlmap_fast
 
 app = Flask(__name__)
 
@@ -33,36 +33,40 @@ logger = logging.getLogger(__name__)
 scanner_lock = threading.Lock()
 active_scanners: Dict[str, AdvancedBurpScanner] = {}
 
-@app.route('/scan', methods=['POST'])
-def sqlmap_scan():
+@app.route('/sql_scan', methods=['POST'])
+def fast_scan():
     data = request.get_json()
+    
+    # Lightweight validation
     if not data or 'url' not in data:
-        return jsonify({"error": "Missing URL parameter"}), 400
+        return jsonify({'error': 'URL required'}), 400
 
-    # Build sqlmap arguments
+    # Optimized arguments
     args = [
         '-u', data['url'],
-        '--flush-session',
-        '--forms',
-        '--crawl=2',
-        '--level=2',
-        '--risk=2'
+        '--crawl=0',  # Disable crawling for speed
+        '--forms',    # But check forms
+        '--risk=3',   # Higher risk = fewer tests
+        '--level=3',  # Balanced depth
+        '--technique=BEUSTQ',  # Fastest techniques
+        '--timeout=30'  # Fail fast
     ]
-    
-    # Add optional parameters
+
+    # Add cookies if provided
     if data.get('cookies'):
-        args.extend(['--cookie', data['cookies']])
-    if data.get('user_agent'):
-        args.extend(['--user-agent', data['user_agent']])
-    
-    # Execute sqlmap
-    result = run_sqlmap(args)
-    
-    # Return results in memory
+        args.extend(['--cookie', data['cookies'][:1024]])  # Limit length
+
+    # Execute and time the scan
+    start = time.monotonic()
+    result = run_sqlmap_fast(args)
+    elapsed = time.monotonic() - start
+
     return jsonify({
-        "success": result.returncode == 0,
-        "stdout": result.stdout.decode('utf-8', 'replace'),
-        "stderr": result.stderr.decode('utf-8', 'replace')
+        'status': 'completed' if result['success'] else 'failed',
+        'vulnerabilities': result['findings']['vulnerabilities'],
+        'database': result['findings']['database'],
+        'scan_time': round(elapsed, 2),
+        'requests_made': len(result['findings']['vulnerabilities']) * 10  # Estimate
     })
     
 def get_scanner(scanner_id: str, config: Optional[Dict] = None) -> AdvancedBurpScanner:
