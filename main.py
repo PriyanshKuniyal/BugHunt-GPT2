@@ -13,6 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 import uvloop
 import json
 from typing import Dict, Optional
+from core.utils.sqlmap import run_sqlmap
 
 app = Flask(__name__)
 
@@ -32,6 +33,38 @@ logger = logging.getLogger(__name__)
 scanner_lock = threading.Lock()
 active_scanners: Dict[str, AdvancedBurpScanner] = {}
 
+@app.route('/scan', methods=['POST'])
+def sqlmap_scan():
+    data = request.get_json()
+    if not data or 'url' not in data:
+        return jsonify({"error": "Missing URL parameter"}), 400
+
+    # Build sqlmap arguments
+    args = [
+        '-u', data['url'],
+        '--flush-session',
+        '--forms',
+        '--crawl=2',
+        '--level=2',
+        '--risk=2'
+    ]
+    
+    # Add optional parameters
+    if data.get('cookies'):
+        args.extend(['--cookie', data['cookies']])
+    if data.get('user_agent'):
+        args.extend(['--user-agent', data['user_agent']])
+    
+    # Execute sqlmap
+    result = run_sqlmap(args)
+    
+    # Return results in memory
+    return jsonify({
+        "success": result.returncode == 0,
+        "stdout": result.stdout.decode('utf-8', 'replace'),
+        "stderr": result.stderr.decode('utf-8', 'replace')
+    })
+    
 def get_scanner(scanner_id: str, config: Optional[Dict] = None) -> AdvancedBurpScanner:
     """Get or create a scanner instance with thread safety"""
     global active_scanners
