@@ -14,7 +14,7 @@ import uvloop
 import json
 from typing import Dict, Optional
 from utils.sqlmap import run_sqlmap_fast
-
+import httpx
 app = Flask(__name__)
 
 # Initialize the repeater
@@ -288,6 +288,29 @@ async def burp_capture():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+async def send_async_request(url, data=None, headers=None, method="POST"):
+    """Make an async HTTP request using httpx"""
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.request(
+                method=method,
+                url=url,
+                json=data,
+                headers=headers,
+                timeout=10.0
+            )
+            return {
+                "success": True,
+                "status_code": response.status_code,
+                "response": response.json()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+            
 @app.route('/repeater', methods=['POST'])
 def repeater():
     """Main endpoint - bridges sync Flask with async httpx"""
