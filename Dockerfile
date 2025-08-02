@@ -15,7 +15,11 @@ RUN pip install --no-cache-dir -r requirements.txt && \
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     sqlmap \
-    && rm -rf /var/lib/apt/lists/*
+    git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone https://github.com/t3l3machus/toxin /opt/toxin \
+    && cd /opt/toxin \
+    && pip install -r requirements.txt
 
 # Create shared memory directory
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
