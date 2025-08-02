@@ -14,6 +14,7 @@ import uvloop
 import json
 from typing import Dict, Optional
 from utils.sqlmap import run_sqlmap_fast
+from utils.toxin import  run_toxin_scan
 import httpx
 app = Flask(__name__)
 
@@ -33,6 +34,35 @@ logger = logging.getLogger(__name__)
 scanner_lock = threading.Lock()
 active_scanners: Dict[str, AdvancedBurpScanner] = {}
 
+@app.route('/xss_scan', methods=['POST'])
+def xss_scan():
+    data = request.get_json()
+    
+    if not data or 'url' not in data:
+        return jsonify({'error': 'URL required'}), 400
+
+    args = [
+        '-u', data['url'],
+        '--method', data.get('method', 'GET'),
+        '--delay', '0',
+        '--timeout', '15'
+    ]
+
+    if data.get('cookies'):
+        args.extend(['--cookies', data['cookies'][:1024]])
+    
+    if data.get('headers'):
+        args.extend(['--headers', data['headers'][:1024]])
+
+    result = run_toxin_scan(args)
+    
+    return jsonify({
+        'status': 'completed' if result['success'] else 'failed',
+        'xss_vulnerabilities': result['findings']['vulnerabilities'],
+        'scan_stats': result['findings']['scan_stats'],
+        'tested_url': data['url']
+    })
+    
 @app.route('/sql_scan', methods=['POST'])
 def fast_scan():
     data = request.get_json()
