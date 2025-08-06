@@ -25,20 +25,21 @@ COPY requirements.txt ./
 # Install all Python dependencies in single optimized layer
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt && \
-    cd /opt/toxin && \
-    pip install --no-cache-dir -r requirements.txt && \
+    # cd /opt/toxin && \
+    # pip install --no-cache-dir -r requirements.txt && \
     playwright install chromium --with-deps && \
     pip cache purge && \
     find /usr/local/lib/python*/site-packages -name "*.pyc" -delete && \
     find /usr/local/lib/python*/site-packages -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
 
 # Configure directories and permissions in single layer
-RUN mkdir -p /dev/shm /tmp/toxin-scans && \
+RUN mkdir -p /dev/shm && \
     chmod 1777 /dev/shm && \
-    chmod 777 /tmp/toxin-scans && \
+    # chmod 777 /tmp/toxin-scans && \
     groupadd -r scanner && \
     useradd -r -g scanner scanner && \
-    chown -R scanner:scanner /app /opt/toxin
+    chown -R scanner:scanner /app
+    # chown -R scanner:scanner /app /opt/toxin
 
 # Switch to non-root user
 USER scanner
@@ -52,7 +53,7 @@ HEALTHCHECK --interval=30s --timeout=5s \
 
 # Runtime configuration
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    TMPDIR=/tmp/toxin-scans
+    PYTHONPATH=/app
+    # TMPDIR=/tmp/toxin-scans
 
 CMD ["python3", "main.py"]
