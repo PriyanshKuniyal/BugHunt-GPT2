@@ -12,20 +12,24 @@ RUN apt-get update && \
 RUN mkdir -p /python-packages && \
     mkdir -p /opt/toxin
 
-# First copy only requirements files
-COPY requirements.txt .
-COPY /opt/toxin/requirements.txt /opt/toxin/requirements.txt
+# Copy all files first (including requirements.txt)
+COPY . .
 
-# Install Python dependencies to custom directory
+# Install main requirements
 ENV PIP_TARGET=/python-packages
-RUN pip install --no-cache-dir --target=${PIP_TARGET} -r requirements.txt && \
-    cd /opt/toxin && \
-    pip install --no-cache-dir --target=${PIP_TARGET} -r requirements.txt && \
-    playwright install chromium && \
-    playwright install-deps
+RUN if [ -f requirements.txt ]; then \
+        pip install --no-cache-dir --target=${PIP_TARGET} -r requirements.txt; \
+    fi
 
-# Clone Toxssin (after dependencies are installed)
-RUN git clone --depth 1 https://github.com/t3l3machus/toxssin /opt/toxin
+# Install Toxin requirements if exists
+RUN if [ -f /opt/toxin/requirements.txt ]; then \
+        cd /opt/toxin && \
+        pip install --no-cache-dir --target=${PIP_TARGET} -r requirements.txt; \
+    fi
+
+# Install Playwright
+RUN playwright install chromium && \
+    playwright install-deps
 
 # Create non-root user
 RUN groupadd -r scanner && \
@@ -47,13 +51,13 @@ COPY --from=builder --chown=scanner:scanner /python-packages /usr/local/lib/pyth
 COPY --from=builder --chown=scanner:scanner /opt/toxin /opt/toxin
 COPY --from=builder --chown=scanner:scanner /usr/bin/sqlmap /usr/bin/sqlmap
 
-# Copy application code from current directory
+# Copy application code
 COPY --chown=scanner:scanner . .
 
 # Create non-root user
 RUN groupadd -r scanner && \
     useradd -r -g scanner scanner && \
-    chown -R scanner:scanner /opt/toxin
+    chown -R scanner:scanner .
 
 USER scanner
 
