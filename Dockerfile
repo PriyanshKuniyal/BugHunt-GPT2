@@ -21,3 +21,5 @@ RUN apt-get update && \
 RUN mkdir -p /dev/shm && chmod 1777 /dev/shm
 # Copy rest of the project
 COPY . /app
+EXPOSE 8080
+CMD ["python", "main.py"]
