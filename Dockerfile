@@ -28,7 +28,7 @@ RUN mkdir -p /dev/shm && \
 # Create non-root user
 RUN groupadd -r scanner && \
     useradd -r -g scanner scanner && \
-    chown -R scanner:scanner /app /opt/toxin
+    chown -R scanner:scanner / /opt/toxin
 
 # --- Stage 2: Final Slim Image ---
 FROM mcr.microsoft.com/playwright/python:v1.48.0-focal
@@ -37,7 +37,7 @@ FROM mcr.microsoft.com/playwright/python:v1.48.0-focal
 COPY --from=builder /opt/toxin /opt/toxin
 COPY --from=builder /usr/local/lib/python3.8/site-packages /usr/local/lib/python3.8/site-packages
 COPY --from=builder /usr/bin/sqlmap /usr/bin/sqlmap
-COPY --from=builder /app /app
+COPY --from=builder / /
 
 # Recreate directories & permissions
 RUN mkdir -p /dev/shm && \
@@ -48,13 +48,13 @@ RUN mkdir -p /dev/shm && \
 # Recreate non-root user
 RUN groupadd -r scanner && \
     useradd -r -g scanner scanner && \
-    chown -R scanner:scanner /app /opt/toxin
+    chown -R scanner:scanner / /opt/toxin
 
 USER scanner
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
+    PYTHONPATH=/ \
     TMPDIR=/tmp/toxin-scans
 
 # Health check
