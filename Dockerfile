@@ -11,7 +11,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Clone Toxin with shallow clone and retry
-RUN git clone --depth 1 https://github.com/t3l3machus/toxin /opt/toxin || \
+RUN git clone --depth 1 https://github.com/t3l3machus/toxssin /opt/toxin || \
     (rm -rf /opt/toxin && git clone --depth 1 https://github.com/t3l3machus/toxin /opt/toxin)
 
 # Install Python dependencies in optimal order
