@@ -1,42 +1,40 @@
-# Core dependencies - pinned to compatible versions
+# Core
 flask>=2.2,<3.0
-playwright>=1.37.0
+playwright==1.48.0
 httpx==0.24.1
 uvloop==0.19.0
 python-dotenv==1.0.0
 
-# Async and performance
-anyio==3.7.1  # downgraded for compatibility with httpx
+# Async
+anyio==3.7.1  # compatible with httpx==0.24.1
 
-# Data Handling - using lighter alternatives
+# Data
 pydantic==1.10.9
 orjson==3.9.5
 
-# Utilities - minimal versions
+# Utilities
 tqdm==4.65.0
 redis==4.5.5
 click==8.1.3
 numpy==1.24.4
 beautifulsoup4==4.12.3
 
-# Dev/Testing - lighter test framework
+# Dev
 pytest==7.4.0
 pytest-asyncio==0.21.0
 
-# Security - minimal versions
+# Security
 certifi==2024.2.2
 urllib3==2.2.1
 pyjwt==2.8.0
 cryptography==41.0.7
 requests==2.31.0
 
-# ML/Scientific - CPU optimized versions
-tensorflow-cpu==2.12.1
+# ML
+# ⚠️ TEMPORARILY COMMENTED TO AVOID CONFLICTS. Uncomment only if really needed.
+# tensorflow-cpu==2.12.1
 scipy==1.10.1
 scikit-learn==1.3.2
 
 # DNS
 dnspython==2.4.2
-
-# Entropy - Removed invalid/unavailable package
-# entropy  ❌ Not available on PyPI
