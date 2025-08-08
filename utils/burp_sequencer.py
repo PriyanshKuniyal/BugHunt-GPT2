@@ -23,7 +23,7 @@ class SequencerEngine:
             timeout=30.0,
             limits=httpx.Limits(max_connections=100),
             http2=True,
-            follow_redirects=False
+            follow_redirects=True
         )
         self.config = SequencerConfig()
 
