@@ -28,14 +28,25 @@ class SequencerEngine:
         )
         self.config = SequencerConfig()
 
-    async def analyze(self, base_request: Dict, token_locations: List[Dict]) -> Dict:
-        """Main analysis method"""
-        try:
-            samples = await self._collect_samples(base_request, token_locations)
-            return self._analyze_samples(samples, token_locations)
-        except Exception as e:
-            logger.error(f"Analysis failed: {str(e)}")
-            return {"error": str(e)}
+    def _shannon_entropy(self, data: bytes) -> float:
+        """Calculate Shannon entropy for a byte string"""
+        if not data:
+            return 0.0
+        from collections import Counter
+        import math
+    
+        counter = Counter(data)
+        total = len(data)
+        entropy = -sum((count / total) * math.log2(count / total) for count in counter.values())
+        return entropy
+        async def analyze(self, base_request: Dict, token_locations: List[Dict]) -> Dict:
+            """Main analysis method"""
+            try:
+                samples = await self._collect_samples(base_request, token_locations)
+                return self._analyze_samples(samples, token_locations)
+            except Exception as e:
+                logger.error(f"Analysis failed: {str(e)}")
+                return {"error": str(e)}
 
     async def _collect_samples(self, base_request: Dict, token_locations: List[Dict]) -> List[Dict]:
         """Collect token samples from target"""
@@ -110,11 +121,13 @@ class SequencerEngine:
     def _calculate_entropy(self, tokens: List[str]) -> Dict:
         """Calculate entropy metrics"""
         byte_samples = [t.encode() for t in tokens]
+        entropy_values = [self._shannon_entropy(t) for t in byte_samples]
+        
         return {
-            "shannon": entropy.shannon_entropy(b''.join(byte_samples)),
-            "min": min(entropy.shannon_entropy(t) for t in byte_samples),
-            "max": max(entropy.shannon_entropy(t) for t in byte_samples),
-            "mean": np.mean([entropy.shannon_entropy(t) for t in byte_samples])
+            "shannon": self._shannon_entropy(b''.join(byte_samples)),
+            "min": min(entropy_values),
+            "max": max(entropy_values),
+            "mean": float(np.mean(entropy_values))
         }
 
     def _run_randomness_tests(self, tokens: List[str]) -> Dict:
