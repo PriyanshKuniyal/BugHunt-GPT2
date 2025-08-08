@@ -298,9 +298,7 @@ async def sequencer_analysis():
 
         result = await sequencer_engine.analyze(
             base_request=data["base_request"],
-            token_locations=data["token_locations"],
-            sample_size=data.get("sample_size", 500),
-            concurrency=data.get("concurrency", 50)
+            token_locations=data["token_locations"]
         )
         return jsonify(result)
     except Exception as e:
