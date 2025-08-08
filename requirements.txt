@@ -16,7 +16,7 @@ orjson==3.9.5
 tqdm==4.65.0
 redis==4.5.5
 click==8.1.3
-numpy==1.24.4
+numpy
 beautifulsoup4==4.12.3
 
 # Dev
@@ -32,7 +32,7 @@ requests==2.31.0
 
 # ML
 # ⚠️ TEMPORARILY COMMENTED TO AVOID CONFLICTS. Uncomment only if really needed.
-# tensorflow-cpu==2.12.1
+tensorflow-cpu==2.12.1
 scipy==1.10.1
 scikit-learn==1.3.2
 
