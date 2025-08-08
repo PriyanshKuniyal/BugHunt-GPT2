@@ -7,7 +7,6 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 from scipy import stats
-import entropy
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
