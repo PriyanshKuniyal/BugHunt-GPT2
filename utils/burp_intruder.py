@@ -160,6 +160,9 @@ class IntruderEngine:
         }
 
         for response in responses:
+            if response is None:
+                stats["errors"] += 1
+                continue
             if isinstance(response, Exception):
                 stats["errors"] += 1
                 continue
