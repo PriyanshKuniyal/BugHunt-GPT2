@@ -38,14 +38,14 @@ class SequencerEngine:
         total = len(data)
         entropy = -sum((count / total) * math.log2(count / total) for count in counter.values())
         return entropy
-        async def analyze(self, base_request: Dict, token_locations: List[Dict]) -> Dict:
-            """Main analysis method"""
-            try:
-                samples = await self._collect_samples(base_request, token_locations)
-                return self._analyze_samples(samples, token_locations)
-            except Exception as e:
-                logger.error(f"Analysis failed: {str(e)}")
-                return {"error": str(e)}
+    async def analyze(self, base_request: Dict, token_locations: List[Dict]) -> Dict:
+        """Main analysis method"""
+        try:
+            samples = await self._collect_samples(base_request, token_locations)
+            return self._analyze_samples(samples, token_locations)
+        except Exception as e:
+            logger.error(f"Analysis failed: {str(e)}")
+            return {"error": str(e)}
 
     async def _collect_samples(self, base_request: Dict, token_locations: List[Dict]) -> List[Dict]:
         """Collect token samples from target"""
