@@ -1,11 +1,9 @@
 import asyncio
-import random
-import time
-from typing import Dict, List, Optional
 import httpx
-from dataclasses import dataclass
 import logging
 import numpy as np
+from dataclasses import dataclass
+from typing import List, Dict, Optional
 from scipy import stats
 
 logging.basicConfig(level=logging.INFO)
@@ -23,7 +21,7 @@ class SequencerEngine:
             timeout=30.0,
             limits=httpx.Limits(max_connections=100),
             http2=True,
-            follow_redirects=True
+            follow_redirects=True  # Robust: follow redirects for real-world and httpbin
         )
         self.config = SequencerConfig()
 
@@ -33,12 +31,17 @@ class SequencerEngine:
             return 0.0
         from collections import Counter
         import math
-    
+
         counter = Counter(data)
         total = len(data)
         entropy = -sum((count / total) * math.log2(count / total) for count in counter.values())
         return entropy
-    async def analyze(self, base_request: Dict, token_locations: List[Dict]) -> Dict:
+
+    async def analyze(
+        self,
+        base_request: Dict,
+        token_locations: List[Dict]
+    ) -> Dict:
         """Main analysis method"""
         try:
             samples = await self._collect_samples(base_request, token_locations)
@@ -62,12 +65,26 @@ class SequencerEngine:
                         cookies=base_request.get("cookies", {}),
                         data=base_request.get("body")
                     )
-                    sample = {}
+
+                    # Robust: Combine cookies from final response and from Set-Cookie headers in the redirect chain
+                    tokens_found = {}
+                    # 1. Check cookies in the final response object
                     for loc in token_locations:
                         token = self._extract_token(resp, loc)
                         if token:
-                            sample[f"{loc['type']}:{loc['name']}"] = token
-                    return sample
+                            tokens_found[f"{loc['type']}:{loc['name']}"] = token
+
+                    # 2. Check Set-Cookie headers in the history (redirect chain)
+                    if hasattr(resp, "history"):
+                        for prev_response in resp.history:
+                            for loc in token_locations:
+                                token = self._extract_token_from_headers(prev_response, loc)
+                                if token:
+                                    tokens_found[f"{loc['type']}:{loc['name']}"] = token
+
+                    logger.debug(f"Sample tokens found: {tokens_found}")
+                    return tokens_found if tokens_found else None
+
                 except Exception as e:
                     logger.warning(f"Sample collection failed: {str(e)}")
                     return None
@@ -77,9 +94,8 @@ class SequencerEngine:
             sample = await future
             if sample:
                 samples.append(sample)
-                if len(samples) % 100 == 0:
+                if len(samples) % 10 == 0:
                     logger.info(f"Collected {len(samples)} samples")
-
         return samples
 
     def _extract_token(self, response: httpx.Response, location: Dict) -> Optional[str]:
@@ -93,100 +109,71 @@ class SequencerEngine:
         except Exception:
             return None
 
+    def _extract_token_from_headers(self, response: httpx.Response, location: Dict) -> Optional[str]:
+        """Extract token from Set-Cookie header in a response"""
+        if location["type"] != "cookie":
+            return None
+        # httpx >= 0.23: get_list for multiple Set-Cookie headers
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        for header in set_cookie_headers:
+            cookie_pair = header.split(";", 1)[0]
+            if "=" in cookie_pair:
+                name, value = cookie_pair.split("=", 1)
+                if name.strip() == location["name"]:
+                    return value
+        return None
+
     def _analyze_samples(self, samples: List[Dict], token_locations: List[Dict]) -> Dict:
         """Analyze collected token samples"""
         results = {}
         for loc in token_locations:
             loc_key = f"{loc['type']}:{loc['name']}"
-            tokens = [s[loc_key] for s in samples if loc_key in s]
-            
+            tokens = [s[loc_key] for s in samples if loc_key in s and s[loc_key] is not None]
+
             if len(tokens) < self.config.analysis_threshold:
                 logger.warning(f"Insufficient samples for {loc_key}")
                 continue
 
+            entropy = self._shannon_entropy("".join(tokens).encode())
+            unique_tokens = len(set(tokens))
+            duplicates = len(tokens) - unique_tokens
+            token_lengths = [len(t) for t in tokens]
+            median_length = np.median(token_lengths)
+            stdev_length = np.std(token_lengths)
+            chi2, pval = self._chi_squared_uniformity(tokens)
+
             results[loc_key] = {
-                "entropy": self._calculate_entropy(tokens),
-                "randomness_tests": self._run_randomness_tests(tokens),
-                "basic_stats": self._calculate_stats(tokens)
+                "total_samples": len(tokens),
+                "unique_tokens": unique_tokens,
+                "duplicates": duplicates,
+                "entropy": entropy,
+                "median_length": median_length,
+                "stdev_length": stdev_length,
+                "chi2_stat": chi2,
+                "p_value": pval,
+                "token_example": tokens[:5]
             }
+
         return {
-            "results": results,
             "metadata": {
-                "total_samples": len(samples),
-                "analysis_threshold": self.config.analysis_threshold
-            }
-        }
-
-    def _calculate_entropy(self, tokens: List[str]) -> Dict:
-        """Calculate entropy metrics"""
-        byte_samples = [t.encode() for t in tokens]
-        entropy_values = [self._shannon_entropy(t) for t in byte_samples]
-        
-        return {
-            "shannon": self._shannon_entropy(b''.join(byte_samples)),
-            "min": min(entropy_values),
-            "max": max(entropy_values),
-            "mean": float(np.mean(entropy_values))
-        }
-
-    def _run_randomness_tests(self, tokens: List[str]) -> Dict:
-        """Run statistical randomness tests"""
-        char_samples = [ord(c) for t in tokens for c in t]
-        return {
-            "chi_square": self._chi_square_test(char_samples),
-            "runs_test": self._runs_test(char_samples)
-        }
-
-    def _calculate_stats(self, tokens: List[str]) -> Dict:
-        """Calculate basic statistics"""
-        lengths = [len(t) for t in tokens]
-        return {
-            "count": len(tokens),
-            "length": {
-                "min": min(lengths),
-                "max": max(lengths),
-                "mean": np.mean(lengths),
-                "std": np.std(lengths)
+                "analysis_threshold": self.config.analysis_threshold,
+                "total_samples": len(samples)
             },
-            "unique_tokens": len(set(tokens))
+            "results": results
         }
 
-    def _chi_square_test(self, data: List[int]) -> Dict:
-        """Chi-square goodness-of-fit test"""
-        observed = np.bincount(data, minlength=256)
-        expected = np.full(256, len(data)/256)
-        chi2 = np.sum((observed - expected)**2 / expected)
-        return {
-            "statistic": float(chi2),
-            "p_value": float(1 - stats.chi2.cdf(chi2, 255)),
-            "passed": chi2 < 300
-        }
+    def _chi_squared_uniformity(self, tokens: List[str]):
+        """Perform chi-squared test for uniformity"""
+        if not tokens:
+            return None, None
+        chars = "".join(tokens)
+        values = [ord(c) for c in chars]
+        if not values:
+            return None, None
+        freq = np.bincount(values)
+        expected = np.full_like(freq, np.mean(freq))
+        chi2, pval = stats.chisquare(freq, expected)
+        return float(chi2), float(pval)
 
-    def _runs_test(self, data: List[int]) -> Dict:
-        """Wald-Wolfowitz runs test"""
-        median = np.median(data)
-        runs = 1
-        prev = data[0] > median
-
-        for val in data[1:]:
-            current = val > median
-            if current != prev:
-                runs += 1
-            prev = current
-
-        n1 = sum(1 for val in data if val > median)
-        n2 = len(data) - n1
-        expected_runs = (2 * n1 * n2) / (n1 + n2) + 1
-        std_dev = np.sqrt((2 * n1 * n2 * (2 * n1 * n2 - n1 - n2)) / 
-                         ((n1 + n2)**2 * (n1 + n2 - 1)))
-
-        z_score = (runs - expected_runs) / std_dev
-        return {
-            "runs": runs,
-            "z_score": float(z_score),
-            "p_value": float(2 * (1 - stats.norm.cdf(abs(z_score)))),
-            "passed": abs(z_score) < 1.96
-        }
-
-# Create the singleton instance
-sequencer_engine = SequencerEngine()
+    async def close(self):
+        await self.client.aclose()
