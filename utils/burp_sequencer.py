@@ -163,19 +163,19 @@ class SequencerEngine:
         }
 
     def _chi_squared_uniformity(self, tokens: List[str]):
-        """Perform chi-squared test for uniformity"""
+        """Perform chi-squared test for uniformity, robust to zero counts."""
         if not tokens:
             return None, None
         chars = "".join(tokens)
-        values = [ord(c) for c in chars]
-        if not values:
+        if not chars:
             return None, None
+        values = [ord(c) for c in chars]
         freq = np.bincount(values)
-        expected = np.full_like(freq, np.mean(freq))
-        chi2, pval = stats.chisquare(freq, expected)
+        # Only keep nonzero bins for observed and expected
+        observed = freq[freq > 0]
+        n = observed.sum()
+        expected = np.full_like(observed, n / len(observed))
+        chi2, pval = stats.chisquare(observed, expected)
         return float(chi2), float(pval)
-
-    async def close(self):
-        await self.client.aclose()
 
 sequencer_engine = SequencerEngine()
