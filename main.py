@@ -14,6 +14,7 @@ import uvloop
 import json
 from typing import Dict, Optional
 from utils.sqlmap import run_sqlmap_fast
+from utils.web_browser import TextBasedBrowser
 #from utils.toxin import  run_toxin_scan
 import httpx
 app = Flask(__name__)
