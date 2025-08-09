@@ -23,6 +23,7 @@ def parse_output(output: str) -> dict:
 
 def run_sqlmap_fast(args: list) -> dict:
     """Optimized sqlmap runner with zero disk I/O and parallel processing"""
+    start_time = time.time()
     # Pre-defined responses for 100% automation
     responses = {
         b"continue? [y/N]": b"y\n",
