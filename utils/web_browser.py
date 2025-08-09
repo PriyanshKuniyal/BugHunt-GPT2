@@ -279,6 +279,9 @@ class TextBasedBrowser:
         results = []
         
         for instruction in instructions:
+            if not isinstance(instruction, dict):
+                results.append(f"Invalid instruction format: {instruction}")
+                continue
             action = instruction.get("action")
             element_id = instruction.get("element_id")
             text = instruction.get("text")
