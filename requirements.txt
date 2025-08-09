@@ -11,7 +11,7 @@ undetected-playwright
 # Data
 pydantic==1.10.9
 orjson==3.9.5
-
+fake-useragent
 # Utilities
 tqdm==4.65.0
 redis==4.5.5
