@@ -7,7 +7,7 @@ python-dotenv==1.0.0
 playwright-stealth
 # Async
 anyio==3.7.1  # compatible with httpx==0.24.1
-
+undetected-playwright
 # Data
 pydantic==1.10.9
 orjson==3.9.5
