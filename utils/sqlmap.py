@@ -2,7 +2,7 @@ import subprocess
 import re
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-
+import time
 def parse_output(output: str) -> dict:
     """Lightning-fast output parser using regex pre-compilation"""
     vuln_re = re.compile(r'Parameter: (.+?)\n.*?Type: (.+?)\n.*?Title: (.+?)(?:\n|$)')
