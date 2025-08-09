@@ -23,8 +23,7 @@ class TextBasedBrowser:
                 '--disable-features=IsolateOrigins,site-per-process',
                 f'--proxy-server={proxy}' if proxy else ''
             ],
-            slow_mo=random.uniform(80, 150),
-            executable_path="path/to/chromium"
+            slow_mo=random.uniform(80, 150)
         )
         
         # Random human-like user agent
