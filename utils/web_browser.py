@@ -14,14 +14,13 @@ class TextBasedBrowser:
         self.playwright = sync_playwright().start()
         self.browser = self.playwright.chromium.launch(
             headless=headless,
-            args=[
+            args = [
                 '--disable-blink-features=AutomationControlled',
                 '--disable-infobars',
                 '--no-sandbox',
                 '--disable-setuid-sandbox',
                 '--disable-web-security',
                 '--disable-features=IsolateOrigins,site-per-process',
-                f'--user-data-dir={user_data_dir}' if user_data_dir else '',
                 f'--proxy-server={proxy}' if proxy else ''
             ],
             slow_mo=random.uniform(80, 150),
