@@ -43,12 +43,25 @@ async def capture_data(url: str) -> dict:
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
                 }
             )
-            result["server_response"] = {
-                "status_code": resp.status_code,
-                "headers": dict(resp.headers),
-                "final_url": str(resp.url),
-                "content_sample": resp.text[:2000] + "..." if len(resp.text) > 2000 else resp.text
-            }
+            try:
+                content_sample = resp.text[:2000] + "..." if len(resp.text) > 2000 else resp.text
+                result["server_response"] = {
+                    "status_code": resp.status_code,
+                    "headers": dict(resp.headers),
+                    "final_url": str(resp.url),
+                    "content_sample": resp.text[:2000] + "..." if len(resp.text) > 2000 else resp.text
+                }
+            except Exception as e:
+                # log and continue with raw or empty content
+                logger.warning(f"Decompression or decoding failed: {e}")
+                content_sample = "<decompression error>"
+                result["server_response"] = {
+                    "status_code": resp.status_code,
+                    "headers": dict(resp.headers),
+                    "final_url": str(resp.url),
+                    "content_sample": content_sample
+                }
+
         except Exception as e:
             error_msg = f"Server request failed: {str(e)}"
             logger.error(error_msg)
