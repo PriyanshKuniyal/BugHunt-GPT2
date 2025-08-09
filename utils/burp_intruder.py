@@ -172,9 +172,12 @@ class IntruderEngine:
             
             if resp.status_code < 400:
                 stats["successful"] += 1
-            
-            # Normalize and deduplicate
-            normalized = self._normalize_response(resp.text)
+            try:
+                # Normalize and deduplicate
+                normalized = self._normalize_response(resp.text)
+            except Exception as e:
+                logger.warning(f"decompressing failed: {str(e)}")
+                return e
             response_key = (
                 f"{resp.status_code}|||{len(resp.text)}|||"
                 f"{hash(normalized)}|||{resp.elapsed.total_seconds()}"
