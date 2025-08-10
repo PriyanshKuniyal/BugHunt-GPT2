@@ -225,19 +225,15 @@ def get_browser():
 def execute_browser_commands():
     """Endpoint for executing browser commands"""
     try:
-        data = request.json
-        
-        # Validate input
-        if not data or 'instructions' not in data:
-            return jsonify({"error": "Missing 'instructions' in payload"}), 400
-        
+        data = request.json or {}
+
         # Get browser instance
         browser = get_browser()
-        
-        # Execute instructions
-        results = browser.execute_ai_instructions(data['instructions'])
-        
-        # Return both the results and current page state
+
+        results = []
+        if 'instructions' in data:
+            results = browser.execute_ai_instructions(data['instructions'])
+
         return jsonify({
             "results": results,
             "current_state": browser.current_page_text,
@@ -245,9 +241,10 @@ def execute_browser_commands():
                 elem["description"] for elem in browser.interactive_elements
             ]
         })
-        
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/browser/reset', methods=['POST'])
 def reset_browser():
