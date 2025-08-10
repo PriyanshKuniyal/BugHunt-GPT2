@@ -277,16 +277,29 @@ class TextBasedBrowser:
     def execute_ai_instructions(self, instructions):
         """Execute a series of AI-generated instructions"""
         results = []
-        
+    
+        # If a single string comes in, wrap it into a dict
+        if isinstance(instructions, str):
+            instructions = [{"action": "natural_language", "text": instructions}]
+    
+        # If a single dict comes in, wrap it into a list
+        if isinstance(instructions, dict):
+            instructions = [instructions]
+    
+        # Must be a list now
+        if not isinstance(instructions, list):
+            return ["Invalid instructions format. Must be list, dict, or string."]
+    
         for instruction in instructions:
             if not isinstance(instruction, dict):
                 results.append(f"Invalid instruction format: {instruction}")
                 continue
+    
             action = instruction.get("action")
             element_id = instruction.get("element_id")
             text = instruction.get("text")
             url = instruction.get("url")
-            
+    
             try:
                 if action == "navigate":
                     results.append(self.navigate(url))
@@ -298,12 +311,16 @@ class TextBasedBrowser:
                     results.append(self.scroll_page())
                 elif action == "bypass_security":
                     results.append(self.bypass_security())
+                elif action == "natural_language":
+                    # For now, just echo it — later we can parse into real actions
+                    results.append(f"Received natural language command: {text}")
                 else:
                     results.append("Unknown action")
             except Exception as e:
                 results.append(f"Action failed: {str(e)}")
-        
+    
         return results
+
 
     def close(self):
         """Clean up resources"""
